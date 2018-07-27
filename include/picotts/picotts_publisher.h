@@ -7,7 +7,7 @@
 class PicoTTSPublisher {
 public:
   PicoTTSPublisher() {
-    _pub = _nh.advertise<std_msgs::String>("tts", 1);
+    _pub = _nh.advertise<std_msgs::String>("picotts/tts", 1);
   }
 
   void say(const std::string & sentence) {
