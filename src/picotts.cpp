@@ -281,8 +281,11 @@ void tts_cb(const std_msgs::StringConstPtr & msg) {
       command << "&LOCALE=en-US";
     else
       command << "&LOCALE=" << _language;
-    if (_language == "en")
-      command << "&VOICE=cmu-slt-hsmm"; // en_US female hmm
+    if (_language == "en") {
+      //command << "&VOICE=cmu-slt-hsmm"; // en_US female hmm
+      command << "&VOICE=cmu-rms-hsmm"; // en_US low pitch male hmm
+      //command << "&VOICE=cmu-bdl-hsmm"; // en_US higher pitch male hmm
+    }
     else if (_language == "fr")
       command << "&VOICE=upmc-pierre-hsmm"; // fr male hmm
     else {
