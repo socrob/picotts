@@ -25,6 +25,7 @@
 #include <fstream>
 #include <vector>
 #include <string>
+#include <exception>
 // ROS msg
 #include <ros/ros.h>
 #include <ros/package.h>
@@ -71,6 +72,8 @@ CachedFilesMap _microsoft_cache(ros::package::getPath("picotts") + "/data/micros
 // ENGINE_PICO2WAVE
 static const std::string TMP_PICO2WAVE_FILE = "/tmp/picotts_pico2wave.wav";
 CachedFilesMap _pico2wave_cache(ros::package::getPath("picotts") + "/data/pico2wave_cache/index.csv");
+
+ros::Publisher event_out_pub;
 
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -167,12 +170,13 @@ bool at_get_short_chunk(const std::string & langAt,
 
 ////////////////////////////////////////////////////////////////////////////////
 
-void tts_cb(const std_msgs::StringConstPtr & msg) {
+bool handle_sentence(const std::string& sentence) {
+
   // split sentence and find correct language
-  utils::stringSplit(msg->data, "|", &_versions);
+  utils::stringSplit(sentence, "|", &_versions);
   std::string tosay = "";
   if (!utils::find_given_language_in_multilanguage_line(_versions, _language, tosay))
-    tosay = msg->data;
+    tosay = sentence;
   std::string key = _language + ":" + tosay;
   // clean sentence
   std::string tosay_clean = tosay;
@@ -182,12 +186,13 @@ void tts_cb(const std_msgs::StringConstPtr & msg) {
 
   if (_engine == ENGINE_ATandT) {
     if (mplayer_cached_file_if_available(_at_cache, key))
-      return;
+      return true;
     std::string langAt = "en-US";
     if (_language == "es")      langAt = "es-US";
     else if (_language == "en") langAt = "en-US";
     else {
       ROS_WARN("Unsupported language'%s'", _language.c_str());
+      return false;
     }
     if (at_get_short_chunk(langAt, tosay_clean, TMP_AT_FILE)
         && mplayer_file(TMP_AT_FILE))
@@ -219,9 +224,11 @@ void tts_cb(const std_msgs::StringConstPtr & msg) {
     utils::exec_system(command.str().c_str());
   } // end if (ENGINE_GNUSTEP)
   else if (_engine == ENGINE_GOOGLE) {
+    ROS_WARN("Not currently working");
+    return false;
     // list languages: https://translate.google.com/#en/af/test and check for "loudspeaker" button
     if (mplayer_cached_file_if_available(_google_cache, key))
-      return;
+      return true;
     // build the url
     command << "wget ";
     command << "\"http://translate.google.com/translate_tts?";
@@ -244,7 +251,7 @@ void tts_cb(const std_msgs::StringConstPtr & msg) {
   else if (_engine == ENGINE_IVONA) {
     // list languages: https://www.ivona.com/us/about-us/voice-portfolio/
     if (mplayer_cached_file_if_available(_ivona_cache, key))
-      return;
+      return true;
     std::string lang_ivona = "en-GB", voicename = "Amy";
     if (_language == "en") {
       lang_ivona = "en-GB";
@@ -257,6 +264,7 @@ void tts_cb(const std_msgs::StringConstPtr & msg) {
       voicename = "Celine";
     } else {
       ROS_WARN("Unsupported language'%s'", _language.c_str());
+      return false;
     }
     command << "bash " << _scripts_folder << "/ivona.bash \""
             << _ivona_credentials << "\"  \""
@@ -271,7 +279,7 @@ void tts_cb(const std_msgs::StringConstPtr & msg) {
   else if (_engine == ENGINE_MARYTTS) {
     // list languages: http://localhost:59125/locales: de en_GB en_US fr it lb ru sv te tr
     if (mplayer_cached_file_if_available(_marytts_cache, key))
-      return;
+      return true;
     command << "wget ";
     command << "\"http://localhost:59125/process?INPUT_TYPE=TEXT";
     command << "&OUTPUT_TYPE=AUDIO";
@@ -291,6 +299,7 @@ void tts_cb(const std_msgs::StringConstPtr & msg) {
     else {
       ROS_WARN("Unsupported language'%s'", _language.c_str());
       command << "&VOICE=cmu-slt-hsmm"; // en_US female hmm
+      return false;
     }
     command << "&INPUT_TEXT=" << tosay_clean;
     command << "\"";
@@ -305,7 +314,7 @@ void tts_cb(const std_msgs::StringConstPtr & msg) {
     // list of languages:
     // http://api.microsofttranslator.com/v2/Http.svc/GetLanguagesForSpeak?appId=6844AE3580856D2EC7A64C79F55F11AA47CB961B
     if (mplayer_cached_file_if_available(_microsoft_cache, key))
-      return;
+      return true;
     std::ostringstream command;
     command << "wget ";
     command << "\"http://api.microsofttranslator.com/v2/Http.svc/Speak?";
@@ -324,7 +333,7 @@ void tts_cb(const std_msgs::StringConstPtr & msg) {
     // $ pico2wave -l fr-FR -w test.wav "Bonjour, je parle le français aussi bien que vous. Ou presque."
     // list languages: $ pico2wave --lang xxx -w foo.wav "ok"
     if (mplayer_cached_file_if_available(_pico2wave_cache, key))
-      return;
+      return true;
     std::string lang_pico2wave = "en-GB";
     if (_language == "de")      lang_pico2wave = "de-DE";
     else if (_language == "es") lang_pico2wave = "es-ES";
@@ -333,6 +342,7 @@ void tts_cb(const std_msgs::StringConstPtr & msg) {
     else if (_language == "it") lang_pico2wave = "it-IT";
     else {
       ROS_WARN("Unsupported language'%s'", _language.c_str());
+      return false;
     }
     command << "pico2wave "
             << "  --lang=" << lang_pico2wave
@@ -351,6 +361,27 @@ void tts_cb(const std_msgs::StringConstPtr & msg) {
     ROS_INFO("running command '%s'", command.str().c_str());
     utils::exec_system(command.str().c_str());
   } // end if (ENGINE_SPEECH_DISPATCHER)
+
+  return true;
+}
+
+void tts_cb(const std_msgs::StringConstPtr & msg) {
+  std_msgs::String e_out;
+  bool ok = true;
+
+  try{
+    ok = handle_sentence(msg->data);
+  }
+  catch( const std::exception& e ){
+    ROS_ERROR_STREAM(e.what());
+    e_out.data = "e_failure";
+    ok = false;
+  }
+
+  e_out.data = ok ? "e_success" : "e_failure";
+
+
+  event_out_pub.publish(e_out);
 } // end tts_cb()
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -404,8 +435,9 @@ int main (int argc, char** argv) {
   nh_private.param("ivona_credentials", _ivona_credentials, _ivona_credentials);
   engine_switcher(engine_str);
   // make subscribers
-  ros::Subscriber tts_sub = nh_public.subscribe("tts", 1, tts_cb);
+  ros::Subscriber tts_sub = nh_private.subscribe("tts", 1, tts_cb);
   ros::Subscriber engine_sub = nh_private.subscribe("engine", 1, engine_cb);
+  event_out_pub = nh_private.advertise<std_msgs::String>("event_out", 1);
   ROS_INFO("language:'%s', engine:'%s', listening to:'%s'",
            _language.c_str(), engine_str.c_str(), tts_sub.getTopic().c_str());
   ros::spin();
