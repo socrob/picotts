@@ -1,14 +1,16 @@
+<?xml version="1.0"?>
 <launch>
 <arg name="ivona_credentials" default="/home/arnaud/Dropbox/code/ros/etts/data/ivona_credencials.txt" />
-<arg name="marytts_path" default="/home/arnaud/Downloads/marytts-5.2" />
+<arg name="marytts_path" default="$(env HOME)/Software/marytts-5.2" />
+<arg name="engine" default="marytts" />
 
 <!-- to change engine:
 $ rostopic pub -1 /picotts/engine std_msgs/String "espeak"
 -->
-<param name="language" value="fr" />
+<param name="language" value="en" />
 
 <node pkg="picotts" type="picotts.exe" name="picotts"
-      output="screen" required="true" args="_engine:=pico2wave">
+      output="screen" required="true" args="_engine:=$(arg engine)">
   <param name="ivona_credentials" value="$(arg ivona_credentials)"/>
 </node>
 
