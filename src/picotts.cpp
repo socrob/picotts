@@ -74,6 +74,10 @@ static const std::string TMP_PICO2WAVE_FILE = "/tmp/picotts_pico2wave.wav";
 CachedFilesMap _pico2wave_cache(ros::package::getPath("picotts") + "/data/pico2wave_cache/index.csv");
 
 ros::Publisher event_out_pub;
+ros::Publisher mic_control_pub;
+
+std_msgs::String mic_start_msg;
+std_msgs::String mic_stop_msg;
 
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -369,6 +373,9 @@ void tts_cb(const std_msgs::StringConstPtr & msg) {
   std_msgs::String e_out;
   bool ok = true;
 
+  // Mic off
+  mic_control_pub.publish(mic_stop_msg);
+
   try{
     ok = handle_sentence(msg->data);
   }
@@ -377,6 +384,9 @@ void tts_cb(const std_msgs::StringConstPtr & msg) {
     e_out.data = "e_failure";
     ok = false;
   }
+
+  // Mic on
+  mic_control_pub.publish(mic_start_msg);
 
   e_out.data = ok ? "e_success" : "e_failure";
 
@@ -425,6 +435,8 @@ void engine_cb(const std_msgs::StringConstPtr & msg) {
 ////////////////////////////////////////////////////////////////////////////////
 
 int main (int argc, char** argv) {
+  mic_start_msg.data = "e_start";
+  mic_stop_msg.data = "e_stop";
   srand(time(NULL));
   ros::init(argc, argv, "picotts"); //Initialise and create a ROS node
   ros::NodeHandle nh_public, nh_private("~");
@@ -438,6 +450,7 @@ int main (int argc, char** argv) {
   ros::Subscriber tts_sub = nh_private.subscribe("tts", 1, tts_cb);
   ros::Subscriber engine_sub = nh_private.subscribe("engine", 1, engine_cb);
   event_out_pub = nh_private.advertise<std_msgs::String>("event_out", 1);
+  mic_control_pub = nh_public.advertise<std_msgs::String>("mic_control/event_in", 2);
   ROS_INFO("language:'%s', engine:'%s', listening to:'%s'",
            _language.c_str(), engine_str.c_str(), tts_sub.getTopic().c_str());
   ros::spin();
