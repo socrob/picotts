@@ -73,6 +73,8 @@ CachedFilesMap _microsoft_cache(ros::package::getPath("picotts") + "/data/micros
 static const std::string TMP_PICO2WAVE_FILE = "/tmp/picotts_pico2wave.wav";
 CachedFilesMap _pico2wave_cache(ros::package::getPath("picotts") + "/data/pico2wave_cache/index.csv");
 
+bool _play_beeps = false;
+
 ros::Publisher event_out_pub;
 ros::Publisher mic_control_pub;
 
@@ -393,11 +395,14 @@ void tts_cb(const std_msgs::StringConstPtr & msg) {
     ok = false;
   }
 
-  // Play a beep sound if there is a question mark at the end of the sentence
-  auto data_s = static_cast<std::string>(msg->data);
-  if (data_s.back() == '?')
+  if (_play_beeps)
   {
-    ok = play_beep();
+    // Play a beep sound if there is a question mark at the end of the sentence
+    auto data_s = static_cast<std::string>(msg->data);
+    if (data_s.back() == '?')
+    {
+      ok = play_beep();
+    }
   }
 
   // Mic on
@@ -459,6 +464,7 @@ int main (int argc, char** argv) {
   nh_public.param("language", _language, _language);
   nh_private.param("engine", engine_str, engine_str);
   nh_private.param("ivona_credentials", _ivona_credentials, _ivona_credentials);
+  nh_private.param("play_beeps", _play_beeps, _play_beeps);
   engine_switcher(engine_str);
   // make subscribers
   ros::Subscriber tts_sub = nh_private.subscribe("tts", 1, tts_cb);
