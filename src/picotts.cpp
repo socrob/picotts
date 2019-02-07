@@ -92,6 +92,14 @@ bool mplayer_file(const std::string & filename)  {
   return (utils::exec_system(play_cmd.str().c_str()) == 0);
 }
 
+bool play_beep() {
+  std::ostringstream beep_cmd;
+  beep_cmd.str("");
+  beep_cmd << "mplayer /usr/share/sounds/ubuntu/notifications/Rhodes.ogg -really-quiet ";
+  beep_cmd << " 2> /dev/null ";
+  return (utils::exec_system(beep_cmd.str().c_str()) == 0);
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 
 //! \return true if file cached and could be played
@@ -385,11 +393,17 @@ void tts_cb(const std_msgs::StringConstPtr & msg) {
     ok = false;
   }
 
+  // Play a beep sound if there is a question mark at the end of the sentence
+  auto data_s = static_cast<std::string>(msg->data);
+  if (data_s.back() == '?')
+  {
+    ok = play_beep();
+  }
+
   // Mic on
   mic_control_pub.publish(mic_start_msg);
 
   e_out.data = ok ? "e_success" : "e_failure";
-
 
   event_out_pub.publish(e_out);
 } // end tts_cb()
